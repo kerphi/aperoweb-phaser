@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AperoWebNancy Phaser</title>
+  <script src="//cdn.jsdelivr.net/phaser/2.4.4/phaser.min.js"></script>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+  socket = io.connect();
+  </script>
+
+</head>
+<body>
+
+<!-- Le div qui contiendra le jeu HTML5 -->
+<div id="game-canvas"></div>
+
+<script>
+
+var game = new Phaser.Game(1024, 576, Phaser.AUTO, '', { preload: preload,
+  create: create,
+  update: update
+});
+
+function preload() {
+  game.load.image('beer', 'assets/beer-icon.png');
+  game.load.image('bubble', 'assets/bubble.png');
+}
+
+function create() {
+  var emitter;
+  var beerList = {};
+
+  game.stage.backgroundColor = '#FF4775';
+
+  game.scale.scaleMode = Phaser.ScaleManager.SHOW_ALL;
+
+  // game.physics.startSystem(Phaser.Physics.ARCADE);
+  // game.physics.arcade.enable(beer);
+  // beer.body.gravity.y = 400;
+  // beer.body.collideWorldBounds = true;
+  // beer.body.bounce.y = 0.4;
+
+  for (var x = 0; x < 32; x++) {
+    for (var y = 0; y < 18; y++) {
+      var beer = game.add.sprite(x*32, y*32, 'beer');    
+      beer.inputEnabled = true;
+      beer.input.useHandCursor = true;
+      beer.idX = x+y*32;
+      beer.events.onInputDown.add(function (clickedBeer) {
+        socket.emit('want-to-drink-beer', clickedBeer.idX);
+      });
+      beerList[x+y*32] = beer;
+    }
+  }
+
+  emitter = game.add.emitter(0, 0, 500);
+  emitter.makeParticles('bubble');
+  emitter.minParticleSpeed.set(-100, -50);
+  emitter.maxParticleSpeed.set(100, 50);
+  emitter.setAlpha(1, 0.1, 1000, Phaser.Easing.Linear.None);
+  emitter.setScale(0.7, 0.1, 0.7, 0.1, 3000, Phaser.Easing.Quintic.Out);
+  emitter.gravity = 200;
+
+  socket.on('beer-to-drink', function (beerIdX) {
+    var clickedBeer = beerList[beerIdX];
+
+    clickedBeer.destroy();
+
+    emitter.x = clickedBeer.x + 16;
+    emitter.y = clickedBeer.y + 16;
+    // 50 bulles d'un coup pendant 1 sec
+    emitter.start(true, 1000, null, 50);
+  });
+
+}
+
+function update() {
+}
+
+</script>
+
+
+
+</body>
+</html>
