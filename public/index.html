@@ -1,86 +1,139 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-  <title>AperoWebNancy Phaser</title>
-  <script src="//cdn.jsdelivr.net/phaser/2.4.4/phaser.min.js"></script>
+  <head>
+    
+    <!-- Chargement de la lib socket.io et connexion 
+         de la websocket sur le serveur nodejs -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      var socket = io.connect();
+    </script>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script>
-  socket = io.connect();
-  </script>
+    <!-- Chargement de la lib Phaser via un CDN -->
+    <script src="//cdn.jsdelivr.net/phaser/2.4.4/phaser.min.js"></script>
 
-</head>
-<body>
+  </head>
 
-<!-- Le div qui contiendra le jeu HTML5 -->
-<div id="game-canvas"></div>
+  <body>
 
-<script>
+    <!-- Le div qui contiendra le jeu HTML5 -->
+    <div id="game-canvas"></div>
 
-var game = new Phaser.Game(1024, 576, Phaser.AUTO, '', { preload: preload,
-  create: create,
-  update: update
-});
+    <!-- Le code du jeu HTML5 -->
+    <script>
+      var beerList = {};
+      var emitter = null;
 
-function preload() {
-  game.load.image('beer', 'assets/beer-icon.png');
-  game.load.image('bubble', 'assets/bubble.png');
-}
-
-function create() {
-  var emitter;
-  var beerList = {};
-
-  game.stage.backgroundColor = '#FF4775';
-
-  game.scale.scaleMode = Phaser.ScaleManager.SHOW_ALL;
-
-  // game.physics.startSystem(Phaser.Physics.ARCADE);
-  // game.physics.arcade.enable(beer);
-  // beer.body.gravity.y = 400;
-  // beer.body.collideWorldBounds = true;
-  // beer.body.bounce.y = 0.4;
-
-  for (var x = 0; x < 32; x++) {
-    for (var y = 0; y < 18; y++) {
-      var beer = game.add.sprite(x*32, y*32, 'beer');    
-      beer.inputEnabled = true;
-      beer.input.useHandCursor = true;
-      beer.idX = x+y*32;
-      beer.events.onInputDown.add(function (clickedBeer) {
-        socket.emit('want-to-drink-beer', clickedBeer.idX);
+      // initialisation du canvas avec Phaser
+      // - d'une taille de 1024x576
+      // - avec un moteur de rendu CANVAS ou WEBGL (choix automatique)
+      // - branché sur l'élément du dom dont l'id est game-canvas
+      var game = new Phaser.Game(1024, 576, Phaser.AUTO, 'game-canvas', {
+        preload: preload,
+        create: create,
+        update: update
       });
-      beerList[x+y*32] = beer;
-    }
-  }
 
-  emitter = game.add.emitter(0, 0, 500);
-  emitter.makeParticles('bubble');
-  emitter.minParticleSpeed.set(-100, -50);
-  emitter.maxParticleSpeed.set(100, 50);
-  emitter.setAlpha(1, 0.1, 1000, Phaser.Easing.Linear.None);
-  emitter.setScale(0.7, 0.1, 0.7, 0.1, 3000, Phaser.Easing.Quintic.Out);
-  emitter.gravity = 200;
+      /**
+       * preload est dédié au chargement des ressources
+       * les images, les audio, les tilemap etc ...
+       */
+      function preload() {
 
-  socket.on('beer-to-drink', function (beerIdX) {
-    var clickedBeer = beerList[beerIdX];
+        game.load.image('beer',   'assets/beer-icon-1.png');
+        game.load.image('bubble', 'assets/bubble.png');
 
-    clickedBeer.destroy();
+      }
 
-    emitter.x = clickedBeer.x + 16;
-    emitter.y = clickedBeer.y + 16;
-    // 50 bulles d'un coup pendant 1 sec
-    emitter.start(true, 1000, null, 50);
-  });
+      /**
+       * create est dédié à l'initialisation du jeu
+       * pour le mettre dans son état zéro
+       */
+      function create() {
+        // couleur de fond du canvas (par défaut il est noir)
+        game.stage.backgroundColor = '#AAA5FF';
 
-}
+        // prend toute la place disponible
+        game.scale.scaleMode = Phaser.ScaleManager.SHOW_ALL;
+        
+        // gestion du plein écran
+        // game.scale.fullScreenScaleMode = Phaser.ScaleManager.SHOW_ALL;
+        // game.scale.fullScreenTarget    = game.canvas;
+        // game.scale.refresh();
+        // game.input.onDown.add(function () { game.scale.startFullScreen(false); }, this);        
 
-function update() {
-}
+        // ajoute un plein de bières dans le canvas
+        for (var x = 0; x < 32; x++) {
+          for (var y = 0; y < 18; y++) {
 
-</script>
+            // une bière est un sprite
+            var beer = game.add.sprite(x * 32, y * 32, 'beer');
+            
+            // on enregistre ubn identifiant pour chaque sprite
+            // nous permettant plus tard dans un autre contexte JS
+            // de retrouver sa trace
+            beer.idX = x+y*32;
+            beerList[beer.idX] = beer;
+
+            // le sprite réagit à la souris
+            beer.inputEnabled = true;
+            beer.input.useHandCursor = true;
+
+            // lorsque l'on clique sur la bière
+            // nous envoyons un événement au serveur
+            // via la websocket
+            beer.events.onInputDown.add(function (clickedBeer) {
+              socket.emit('want-to-drink-beer', clickedBeer.idX);
+            });
+
+          }
+        }
+
+        // création d'un "particles emitter" qui va nous permettre
+        // de générer de la mousse au moment où une bière est cliquée.
+        // - la mousse est constituée d'un maximum de 500 bulles (bubble)
+        // - la mousse explose (minParticleSpeed et maxParticleSpeed)
+        // - la mousse disparait progressivement (setAlpha et setScale)
+        // - la mousse tombe vers le bas (gravity)
+        emitter = game.add.emitter(0, 0, 500);
+        emitter.makeParticles('bubble');
+        emitter.minParticleSpeed.set(-50, -30);
+        emitter.maxParticleSpeed.set(50, 30);
+        emitter.setAlpha(1, 0.1, 1000, Phaser.Easing.Linear.None);
+        emitter.setScale(0.7, 0.1, 0.7, 0.1, 3000, Phaser.Easing.Quintic.Out);
+        emitter.gravity = 200;
+
+      } // create
+
+      /**
+       * create est dédié aux traitements qu'il est nécessaire
+       * de réaliser images par images.
+       * Par exemple on peut l'utiliser pour tester des colisions
+       * entre objets.
+       */
+      function update() {}
 
 
+      // on écoute la websocket et son événement beer-to-drink
+      // qui est généré par un client qui a cliqué sur une bière
+      socket.on('beer-to-drink', function (beerIdx) {
+        
+        // on récupère le sprite grâce à son identifiant
+        var clickedBeer = beerList[beerIdx];
 
-</body>
+        // on positionne le particules emitter au centre de la bière
+        // qui vient d'être cliquée
+        emitter.x = clickedBeer.x + 16;
+        emitter.y = clickedBeer.y + 16;
+        // on demande d'envoyer de la mousse
+        // constituée de 50 bulles et cela pendant 1 sec
+        emitter.start(true, 1000, null, 50);        
+
+        // nous détruisons le sprite (disparition de la bière sur l'écran)
+        clickedBeer.destroy();
+      });
+
+    </script>
+
+  </body>
 </html>
