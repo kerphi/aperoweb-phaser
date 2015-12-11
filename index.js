@@ -25,3 +25,13 @@ io.on('connection', function (socket) {
     socket.broadcast.emit('beer-to-drink', beerIdx);
   });
 });
+
+// exit on CTRL+C
+exitOnSignal('SIGINT');
+exitOnSignal('SIGTERM');
+function exitOnSignal(signal) {
+  process.on(signal, function() {
+    console.log('Caught ' + signal + ', exiting');
+    process.exit(1);
+  });
+}
