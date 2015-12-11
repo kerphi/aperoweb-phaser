@@ -4,5 +4,5 @@ ADD . /usr/src/app
 WORKDIR /usr/src/app
 RUN npm install
 
-CMD ["node", "/usr/src/app/index.js"]
+CMD ["node", "index.js"]
 EXPOSE 3000
